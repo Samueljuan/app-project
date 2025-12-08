@@ -132,12 +132,11 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
     setState(() {
       _authenticated = authenticated;
       _sessionChecked = true;
+      if (_authenticated) {
+        _cameraPromptDismissed = false;
+        _cameraActive = false;
+      }
     });
-    if (_authenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _resumeCamera();
-      });
-    }
   }
 
   void _handleCapture(BarcodeCapture capture) {
@@ -243,12 +242,11 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
       _authenticated = true;
       _isAuthenticating = false;
       _authError = null;
+      _cameraPromptDismissed = false;
+      _cameraActive = false;
     });
     _usernameController.clear();
     _passwordController.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _resumeCamera();
-    });
   }
 
   Future<void> _pauseCamera() async {
@@ -298,7 +296,9 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
         _showSuccess = false;
         _isSending = false;
       });
-      _resumeCamera();
+      if (_cameraPromptDismissed) {
+        _resumeCamera();
+      }
     });
   }
 
