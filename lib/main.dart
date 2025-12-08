@@ -151,7 +151,6 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
       return;
     }
 
-    _pauseCamera();
     setState(() {
       _pendingValue = code;
       _pendingFormat = validBarcode.format.name;
