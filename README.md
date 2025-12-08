@@ -60,6 +60,20 @@ flutter build web \
 
 Saat aplikasi berjalan, arahkan kamera ke QR/barcode. Ketika kode berhasil terbaca, status akan berubah dan tombol Submit aktif. Tekan tombol tersebut agar data dikirim ke Google Sheet.
 
+## Deploy ke Vercel
+
+Vercel tidak menyediakan Flutter secara default. Gunakan skrip `scripts/ci_build.sh` yang otomatis mengunduh Flutter Linux, menjalankan `flutter pub get`, dan membuild web:
+
+1. **Build & Output Settings**
+   - Install Command: `true` (dikarenakan semua langkah dijalankan pada build command)
+   - Build Command: `bash scripts/ci_build.sh`
+   - Output Directory: `build/web`
+   - Root Directory: `.`
+2. **Environment Variables**
+   - `APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec`
+
+Skrip menerima variabel opsional `FLUTTER_VERSION` bila ingin mengganti versi Flutter. Example Build Command: `FLUTTER_VERSION=3.22.2 bash scripts/ci_build.sh`.
+
 ## Perizinan
 
 - Android sudah ditambahkan `android.permission.CAMERA`.
