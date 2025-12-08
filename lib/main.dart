@@ -265,23 +265,25 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _resumeCamera() async {
-    if (!_authenticated) return;
+  Future<bool> _resumeCamera() async {
+    if (!_authenticated) return false;
     try {
       await _controller.start();
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _cameraActive = true;
         _cameraError = null;
         _cameraPromptDismissed = true;
       });
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _cameraActive = false;
         _cameraError =
             'Kamera tidak dapat dibuka. Pastikan izin kamera diberikan atau tekan ulang.';
       });
+      return false;
     }
   }
 
@@ -383,7 +385,6 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
         cameraActive: _cameraActive,
         cameraError: _cameraError,
         onRequestCamera: () {
-          _cameraPromptDismissed = true;
           _resumeCamera();
         },
         cameraPromptDismissed: _cameraPromptDismissed,
