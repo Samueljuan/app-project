@@ -82,6 +82,7 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
   Timer? _statusResetTimer;
   bool _cameraActive = false;
   String? _cameraError;
+  bool _cameraPromptDismissed = false;
 
   bool get _canSubmit => !_isSending && _pendingValue != null;
 
@@ -272,6 +273,7 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
       setState(() {
         _cameraActive = true;
         _cameraError = null;
+        _cameraPromptDismissed = true;
       });
     } catch (error) {
       if (!mounted) return;
@@ -381,8 +383,10 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
         cameraActive: _cameraActive,
         cameraError: _cameraError,
         onRequestCamera: () {
+          _cameraPromptDismissed = true;
           _resumeCamera();
         },
+        cameraPromptDismissed: _cameraPromptDismissed,
       );
     }
     return Scaffold(body: _buildBackground(content));
@@ -563,6 +567,7 @@ class _ScannerContent extends StatelessWidget {
   final bool cameraActive;
   final String? cameraError;
   final VoidCallback onRequestCamera;
+  final bool cameraPromptDismissed;
   const _ScannerContent({
     required this.controller,
     required this.onCapture,
@@ -577,6 +582,7 @@ class _ScannerContent extends StatelessWidget {
     required this.cameraActive,
     required this.cameraError,
     required this.onRequestCamera,
+    required this.cameraPromptDismissed,
   });
 
   @override
@@ -604,7 +610,7 @@ class _ScannerContent extends StatelessWidget {
                           const Center(child: CircularProgressIndicator()),
                     ),
                     const _ScannerOverlay(),
-                    if (!cameraActive)
+                    if (!cameraActive && !cameraPromptDismissed)
                       Container(
                         color: Colors.black54,
                         child: Center(
