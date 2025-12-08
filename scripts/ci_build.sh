@@ -15,6 +15,8 @@ fi
 
 export PATH="$PWD/flutter/bin:$PATH"
 
+git config --global --add safe.directory "$PWD/flutter" >/dev/null 2>&1 || true
+
 echo "Flutter version:"
 flutter --version
 
