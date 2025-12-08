@@ -47,7 +47,7 @@ class ScannerPage extends StatefulWidget {
   State<ScannerPage> createState() => _ScannerPageState();
 }
 
-class _ScannerPageState extends State<ScannerPage> {
+class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
   static const _kUsername = 'randomstuff.smg';
   static const _kPassword = 'renata elek';
   static const _kAuthStorageKey = 'last_auth_timestamp';
@@ -85,6 +85,7 @@ class _ScannerPageState extends State<ScannerPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
@@ -95,7 +96,20 @@ class _ScannerPageState extends State<ScannerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restoreSession();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _pauseCamera();
+    } else if (state == AppLifecycleState.resumed) {
+      _resumeCamera();
+    }
+    super.didChangeAppLifecycleState(state);
   }
 
   Future<void> _restoreSession() async {
@@ -116,6 +130,11 @@ class _ScannerPageState extends State<ScannerPage> {
       _authenticated = authenticated;
       _sessionChecked = true;
     });
+    if (_authenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resumeCamera();
+      });
+    }
   }
 
   void _handleCapture(BarcodeCapture capture) {
@@ -130,6 +149,7 @@ class _ScannerPageState extends State<ScannerPage> {
       return;
     }
 
+    _pauseCamera();
     setState(() {
       _pendingValue = code;
       _pendingFormat = validBarcode.format.name;
@@ -161,6 +181,7 @@ class _ScannerPageState extends State<ScannerPage> {
         _statusMessage = 'Terkirim: $code';
       });
       _appendLog('Berhasil kirim: $code');
+      _scheduleStatusReset(duration: const Duration(seconds: 2));
     } catch (error) {
       final message = 'Gagal mengirim: $error';
       if (!mounted) return;
@@ -188,10 +209,9 @@ class _ScannerPageState extends State<ScannerPage> {
         .split('.')
         .first;
     setState(() {
-      _logs.insert(0, '[$timestamp] $message');
-      if (_logs.length > 20) {
-        _logs.removeRange(20, _logs.length);
-      }
+      _logs
+        ..clear()
+        ..add('[$timestamp] $message');
     });
   }
 
@@ -223,6 +243,22 @@ class _ScannerPageState extends State<ScannerPage> {
     });
     _usernameController.clear();
     _passwordController.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _resumeCamera();
+    });
+  }
+
+  Future<void> _pauseCamera() async {
+    try {
+      await _controller.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _resumeCamera() async {
+    if (!_authenticated) return;
+    try {
+      await _controller.start();
+    } catch (_) {}
   }
 
   void _scheduleStatusReset({Duration duration = const Duration(seconds: 4)}) {
@@ -236,6 +272,7 @@ class _ScannerPageState extends State<ScannerPage> {
         _showSuccess = false;
         _isSending = false;
       });
+      _resumeCamera();
     });
   }
 
@@ -586,14 +623,10 @@ class _LogPanel extends StatelessWidget {
         children: [
           Text('Log Pengiriman', style: textTheme.labelLarge),
           const SizedBox(height: 8),
-          for (final entry in entries.take(4))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                entry,
-                style: textTheme.bodySmall?.copyWith(color: Colors.white70),
-              ),
-            ),
+          Text(
+            entries.first,
+            style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+          ),
         ],
       ),
     );
