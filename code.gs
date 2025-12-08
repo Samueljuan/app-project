@@ -10,11 +10,7 @@ function doPost(e) {
 
     const payload = getPayload_(e);
 
-    sheet.appendRow([
-      new Date(),
-      payload.value || '',
-      payload.scannedAt || '',
-    ]);
+    sheet.appendRow([payload.value || '']);
 
     return buildResponse_({ status: 'success', message: 'Data berhasil disimpan' });
   } catch (err) {

@@ -10,6 +10,7 @@ A Flutter PWA that instantly opens the device camera, scans QR / barcode values,
 - Setelah kode terbaca, tombol **Submit** akan aktif sehingga operator bisa memastikan kode benar sebelum dikirim.
 - Setelah tombol dikirim ditekan, antarmuka menampilkan status sukses dan riwayat log singkat sehingga operator tahu request terakhir berhasil/ gagal.
 - Penjaga duplikasi sederhana supaya data tidak terkirim berkali-kali ketika kamera masih mengarah ke QR yang sama.
+- Aplikasi kini memiliki layar login (username `randomstuff.smg`, password `renata elek`). Sesi login otomatis dihapus setiap 24 jam, sehingga operator perlu login ulang keesokan harinya. Kredensial disimpan secara lokal menggunakan `shared_preferences`.
 
 ## Menyiapkan Google Apps Script
 
@@ -25,11 +26,7 @@ A Flutter PWA that instantly opens the device camera, scans QR / barcode values,
      const payload = e.parameter && Object.keys(e.parameter).length
        ? e.parameter
        : JSON.parse(e.postData.contents || '{}');
-     sheet.appendRow([
-       new Date(),
-       payload.value || '',
-       payload.scannedAt || '',
-     ]);
+     sheet.appendRow([payload.value || '']);
      return ContentService
        .createTextOutput(JSON.stringify({ status: 'ok' }))
        .setMimeType(ContentService.MimeType.JSON)

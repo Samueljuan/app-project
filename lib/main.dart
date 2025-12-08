@@ -1,11 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const String kAppsScriptUrl = String.fromEnvironment(
   'APPS_SCRIPT_URL',
   defaultValue:
-      'https://script.google.com/macros/s/AKfycbyTotultHxmHdfqN5pa6PVrwI7FKM-4wrUsjDo37L0QEMRjWZUXxYDbcZhOESKxOmTpbQ/exec',
+      'https://script.google.com/macros/s/AKfycbwGo0l5Y_iqY6Plk-Gg2XIEv0OVyaeu8l-r-G_AJBueA6YxwdkJmeNytfzpqxDk_Fib6Q/exec',
 );
 
 void main() {
@@ -46,6 +49,9 @@ class ScannerPage extends StatefulWidget {
 }
 
 class _ScannerPageState extends State<ScannerPage> {
+  static const _kUsername = 'randomstuff.smg';
+  static const _kPassword = 'renata elek';
+  static const _kAuthStorageKey = 'last_auth_timestamp';
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
@@ -68,13 +74,49 @@ class _ScannerPageState extends State<ScannerPage> {
   String? _pendingFormat;
   bool _showSuccess = false;
   final List<String> _logs = <String>[];
+  bool _authenticated = false;
+  bool _sessionChecked = false;
+  bool _isAuthenticating = false;
+  String? _authError;
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  Timer? _statusResetTimer;
 
   bool get _canSubmit => !_isSending && _pendingValue != null;
 
   @override
   void dispose() {
     _controller.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _statusResetTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_kAuthStorageKey);
+    var authenticated = false;
+    if (saved != null) {
+      final savedTime = DateTime.tryParse(saved);
+      if (savedTime != null &&
+          DateTime.now().difference(savedTime) < const Duration(days: 1)) {
+        authenticated = true;
+      } else {
+        await prefs.remove(_kAuthStorageKey);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _authenticated = authenticated;
+      _sessionChecked = true;
+    });
   }
 
   void _handleCapture(BarcodeCapture capture) {
@@ -126,8 +168,11 @@ class _ScannerPageState extends State<ScannerPage> {
       setState(() {
         _statusMessage = message;
         _showSuccess = false;
+        _pendingValue = null;
+        _pendingFormat = null;
       });
       _appendLog(message);
+      _scheduleStatusReset();
     } finally {
       if (mounted) {
         setState(() {
@@ -148,6 +193,50 @@ class _ScannerPageState extends State<ScannerPage> {
       if (_logs.length > 20) {
         _logs.removeRange(20, _logs.length);
       }
+    });
+  }
+
+  Future<void> _handleLogin() async {
+    setState(() {
+      _isAuthenticating = true;
+      _authError = null;
+    });
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+    if (username != _kUsername || password != _kPassword) {
+      setState(() {
+        _authError = 'Username atau password salah.';
+        _isAuthenticating = false;
+      });
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kAuthStorageKey,
+      DateTime.now().toUtc().toIso8601String(),
+    );
+    if (!mounted) return;
+    setState(() {
+      _authenticated = true;
+      _isAuthenticating = false;
+      _authError = null;
+    });
+    _usernameController.clear();
+    _passwordController.clear();
+  }
+
+  void _scheduleStatusReset({Duration duration = const Duration(seconds: 4)}) {
+    _statusResetTimer?.cancel();
+    _statusResetTimer = Timer(duration, () {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = 'Arahkan kamera ke QR / barcode';
+        _pendingValue = null;
+        _pendingFormat = null;
+        _showSuccess = false;
+        _isSending = false;
+      });
     });
   }
 
@@ -208,72 +297,47 @@ class _ScannerPageState extends State<ScannerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF02050B), Color(0xFF051322), Color(0xFF010C16)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+    Widget content;
+    if (!_sessionChecked) {
+      content = const Center(child: CircularProgressIndicator());
+    } else if (!_authenticated) {
+      content = _LoginForm(
+        usernameController: _usernameController,
+        passwordController: _passwordController,
+        isLoading: _isAuthenticating,
+        errorMessage: _authError,
+        onSubmit: _handleLogin,
+      );
+    } else {
+      content = _ScannerContent(
+        controller: _controller,
+        onCapture: _handleCapture,
+        isSending: _isSending,
+        statusMessage: _statusMessage,
+        lastValue: _lastValue,
+        pendingValue: _pendingValue,
+        pendingFormat: _pendingFormat,
+        showSuccess: _showSuccess,
+        submitButton: _buildSubmitButton(),
+        logs: _logs,
+      );
+    }
+    return Scaffold(body: _buildBackground(content));
+  }
+
+  Widget _buildBackground(Widget child) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF02050B), Color(0xFF051322), Color(0xFF010C16)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              children: [
-                const _Header(),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 3 / 4,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            MobileScanner(
-                              controller: _controller,
-                              fit: BoxFit.cover,
-                              onDetect: _handleCapture,
-                              errorBuilder: (context, error) => _CameraError(
-                                errorMessage: error.errorCode.name,
-                              ),
-                              placeholderBuilder: (context) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
-                            const _ScannerOverlay(),
-                            if (_isSending)
-                              Container(
-                                color: Colors.black45,
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _StatusCard(
-                  message: _statusMessage,
-                  latestValue: _lastValue,
-                  pendingValue: _pendingValue,
-                  pendingFormat: _pendingFormat,
-                  showSuccess: _showSuccess,
-                ),
-                const SizedBox(height: 12),
-                _buildSubmitButton(),
-                const SizedBox(height: 12),
-                _LogPanel(entries: _logs),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: child,
         ),
       ),
     );
@@ -422,6 +486,84 @@ class _CameraError extends StatelessWidget {
   }
 }
 
+class _ScannerContent extends StatelessWidget {
+  final MobileScannerController controller;
+  final void Function(BarcodeCapture) onCapture;
+  final bool isSending;
+  final String statusMessage;
+  final String? lastValue;
+  final String? pendingValue;
+  final String? pendingFormat;
+  final bool showSuccess;
+  final Widget submitButton;
+  final List<String> logs;
+  const _ScannerContent({
+    required this.controller,
+    required this.onCapture,
+    required this.isSending,
+    required this.statusMessage,
+    required this.lastValue,
+    required this.pendingValue,
+    required this.pendingFormat,
+    required this.showSuccess,
+    required this.submitButton,
+    required this.logs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _Header(),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: 3 / 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MobileScanner(
+                      controller: controller,
+                      fit: BoxFit.cover,
+                      onDetect: onCapture,
+                      errorBuilder: (context, error) =>
+                          _CameraError(errorMessage: error.errorCode.name),
+                      placeholderBuilder: (context) =>
+                          const Center(child: CircularProgressIndicator()),
+                    ),
+                    const _ScannerOverlay(),
+                    if (isSending)
+                      Container(
+                        color: Colors.black45,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _StatusCard(
+          message: statusMessage,
+          latestValue: lastValue,
+          pendingValue: pendingValue,
+          pendingFormat: pendingFormat,
+          showSuccess: showSuccess,
+        ),
+        const SizedBox(height: 12),
+        submitButton,
+        const SizedBox(height: 12),
+        _LogPanel(entries: logs),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}
+
 class _LogPanel extends StatelessWidget {
   final List<String> entries;
   const _LogPanel({required this.entries});
@@ -493,6 +635,128 @@ class _ScannerOverlay extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LoginForm extends StatelessWidget {
+  final TextEditingController usernameController;
+  final TextEditingController passwordController;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback onSubmit;
+  const _LoginForm({
+    required this.usernameController,
+    required this.passwordController,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Center(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Masuk terlebih dahulu',
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Isi username dan password untuk mengakses kamera.',
+              style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            _AuthTextField(
+              controller: usernameController,
+              label: 'Username',
+              hintText: 'mis. randomstuff.smg',
+              enabled: !isLoading,
+              onSubmitted: (_) => onSubmit(),
+            ),
+            const SizedBox(height: 12),
+            _AuthTextField(
+              controller: passwordController,
+              label: 'Password',
+              hintText: 'Password',
+              obscureText: true,
+              enabled: !isLoading,
+              onSubmitted: (_) => onSubmit(),
+            ),
+            const SizedBox(height: 12),
+            if (errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  errorMessage!,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: isLoading ? null : onSubmit,
+                child: isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Masuk'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sesi login otomatis berakhir setiap 24 jam.',
+              style: textTheme.labelSmall?.copyWith(color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hintText;
+  final bool obscureText;
+  final bool enabled;
+  final ValueChanged<String>? onSubmitted;
+  const _AuthTextField({
+    required this.controller,
+    required this.label,
+    required this.hintText,
+    this.obscureText = false,
+    this.enabled = true,
+    this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      obscureText: obscureText,
+      onSubmitted: onSubmitted,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.08),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

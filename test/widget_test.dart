@@ -13,7 +13,7 @@ void main() {
   test('default Apps Script URL sesuai konfigurasi', () {
     expect(
       kAppsScriptUrl,
-      'https://script.google.com/macros/s/AKfycbyTotultHxmHdfqN5pa6PVrwI7FKM-4wrUsjDo37L0QEMRjWZUXxYDbcZhOESKxOmTpbQ/exec',
+      'https://script.google.com/macros/s/AKfycbwGo0l5Y_iqY6Plk-Gg2XIEv0OVyaeu8l-r-G_AJBueA6YxwdkJmeNytfzpqxDk_Fib6Q/exec',
     );
   });
 }
