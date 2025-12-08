@@ -23,4 +23,10 @@ flutter --version
 flutter config --enable-web >/dev/null
 
 flutter pub get
-flutter build web
+
+if [ -z "${APPS_SCRIPT_URL:-}" ]; then
+  echo "WARNING: APPS_SCRIPT_URL env variable is empty. Build will use empty URL."
+  flutter build web
+else
+  flutter build web --dart-define=APPS_SCRIPT_URL="${APPS_SCRIPT_URL}"
+fi
