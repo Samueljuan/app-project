@@ -80,6 +80,8 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   Timer? _statusResetTimer;
+  bool _cameraActive = false;
+  String? _cameraError;
 
   bool get _canSubmit => !_isSending && _pendingValue != null;
 
@@ -251,14 +253,34 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
   Future<void> _pauseCamera() async {
     try {
       await _controller.stop();
-    } catch (_) {}
+    } catch (_) {
+      // ignore stop errors
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cameraActive = false;
+        });
+      }
+    }
   }
 
   Future<void> _resumeCamera() async {
     if (!_authenticated) return;
     try {
       await _controller.start();
-    } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _cameraActive = true;
+        _cameraError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _cameraActive = false;
+        _cameraError =
+            'Kamera tidak dapat dibuka. Pastikan izin kamera diberikan atau tekan ulang.';
+      });
+    }
   }
 
   void _scheduleStatusReset({Duration duration = const Duration(seconds: 4)}) {
@@ -356,6 +378,11 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
         showSuccess: _showSuccess,
         submitButton: _buildSubmitButton(),
         logs: _logs,
+        cameraActive: _cameraActive,
+        cameraError: _cameraError,
+        onRequestCamera: () {
+          _resumeCamera();
+        },
       );
     }
     return Scaffold(body: _buildBackground(content));
@@ -533,6 +560,9 @@ class _ScannerContent extends StatelessWidget {
   final bool showSuccess;
   final Widget submitButton;
   final List<String> logs;
+  final bool cameraActive;
+  final String? cameraError;
+  final VoidCallback onRequestCamera;
   const _ScannerContent({
     required this.controller,
     required this.onCapture,
@@ -544,6 +574,9 @@ class _ScannerContent extends StatelessWidget {
     required this.showSuccess,
     required this.submitButton,
     required this.logs,
+    required this.cameraActive,
+    required this.cameraError,
+    required this.onRequestCamera,
   });
 
   @override
@@ -571,6 +604,54 @@ class _ScannerContent extends StatelessWidget {
                           const Center(child: CircularProgressIndicator()),
                     ),
                     const _ScannerOverlay(),
+                    if (!cameraActive)
+                      Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Kamera tidak aktif',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (cameraError != null) ...[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                  ),
+                                  child: Text(
+                                    cameraError!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: 8),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 24),
+                                  child: Text(
+                                    'Tekan tombol di bawah untuk menyalakan kamera.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: onRequestCamera,
+                                child: const Text('Aktifkan Kamera'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (isSending)
                       Container(
                         color: Colors.black45,
@@ -710,7 +791,7 @@ class _LoginForm extends StatelessWidget {
             _AuthTextField(
               controller: usernameController,
               label: 'Username',
-              hintText: 'mis. randomstuff.smg',
+              hintText: 'Nama toko',
               enabled: !isLoading,
               onSubmitted: (_) => onSubmit(),
             ),
