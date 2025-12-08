@@ -11,6 +11,7 @@ A Flutter PWA that instantly opens the device camera, scans QR / barcode values,
 - Setelah tombol dikirim ditekan, antarmuka menampilkan status sukses dan riwayat log singkat sehingga operator tahu request terakhir berhasil/ gagal.
 - Penjaga duplikasi sederhana supaya data tidak terkirim berkali-kali ketika kamera masih mengarah ke QR yang sama.
 - Aplikasi kini memiliki layar login (username `randomstuff.smg`, password `renata elek`). Sesi login otomatis dihapus setiap 24 jam, sehingga operator perlu login ulang keesokan harinya. Kredensial disimpan secara lokal menggunakan `shared_preferences`.
+- URL Google Apps Script tidak di-hardcode; isi melalui `APPS_SCRIPT_URL` saat build atau deploy (misalnya lewat environment variable di Vercel atau `--dart-define` ketika testing lokal).
 
 ## Menyiapkan Google Apps Script
 
@@ -41,21 +42,21 @@ A Flutter PWA that instantly opens the device camera, scans QR / barcode values,
 
 ## Menjalankan Aplikasi
 
-Secara default, aplikasi sudah diarahkan ke Apps Script di tautan yang kamu berikan. Jika ingin memakai spreadsheet lain, isi nilai baru melalui `--dart-define` saat menjalankan Flutter.
+Selalu tetapkan endpoint Apps Script melalui `APPS_SCRIPT_URL`. Saat pengembangan lokal, gunakan `--dart-define`; saat deploy (mis. di Vercel), masukkan sebagai environment variable.
 
 ```bash
-flutter run -d chrome --web-renderer html \
+flutter run -d chrome \
   --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
 ```
 
 Untuk build PWA:
 
 ```bash
-flutter build web --web-renderer html \
+flutter build web \
   --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
 ```
 
-> Catatan: Jika ingin mengganti URL permanen, ubah konstanta `kAppsScriptUrl` di `lib/main.dart`. Namun penggunaan `--dart-define` menjaga kode tetap aman di publik/repositori.
+> Catatan: Default `kAppsScriptUrl` di `lib/main.dart` kini kosong agar aman dipublish. Pastikan `APPS_SCRIPT_URL` selalu diisi melalui `--dart-define` atau environment variable.
 
 Saat aplikasi berjalan, arahkan kamera ke QR/barcode. Ketika kode berhasil terbaca, status akan berubah dan tombol Submit aktif. Tekan tombol tersebut agar data dikirim ke Google Sheet.
 
