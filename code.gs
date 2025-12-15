@@ -1,6 +1,10 @@
 const SHEET_ID = '1ISLFFJKkfUkDQ2NoAl772k9jjAr_wVo-tBfa9-4AcUA';
 const SHEET_NAME = 'Sheet1';
 
+function doGet() {
+  return buildResponse_({ status: 'ok', message: 'Endpoint siap menerima data' });
+}
+
 function doPost(e) {
   try {
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
@@ -12,7 +16,12 @@ function doPost(e) {
 
     sheet.appendRow([payload.value || '']);
 
-    return buildResponse_({ status: 'success', message: 'Data berhasil disimpan' });
+    return buildResponse_({
+      status: 'success',
+      message: 'Data berhasil disimpan',
+      received: payload,
+      storedAt: new Date().toISOString(),
+    });
   } catch (err) {
     console.error(err);
     return buildResponse_({ status: 'error', message: err.toString() }, 500);
@@ -38,7 +47,9 @@ function buildResponse_(body, statusCode) {
   const output = ContentService.createTextOutput(JSON.stringify(body))
     .setMimeType(ContentService.MimeType.JSON)
     .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Max-Age', '3600');
   if (statusCode) {
     output.setResponseCode(statusCode);
   }

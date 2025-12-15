@@ -307,10 +307,28 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
       throw 'Isi kAppsScriptUrl dengan URL Apps Script milikmu';
     }
 
-    final response = await http.post(
-      Uri.parse(url),
-      body: {'value': code, 'scannedAt': scannedAt.toUtc().toIso8601String()},
-    );
+    http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse(url),
+        body: {
+          'value': code,
+          'scannedAt': scannedAt.toUtc().toIso8601String(),
+        },
+      );
+    } on http.ClientException catch (error) {
+      final message = error.message;
+      final looksLikeCors =
+          message.contains('Failed to fetch') || message.contains('Load failed');
+      _appendLog(
+        'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
+        'Data biasanya tetap terkirim, cek spreadsheet untuk memastikannya.',
+      );
+      if (looksLikeCors) {
+        return;
+      }
+      rethrow;
+    }
 
     if (response.statusCode >= 400) {
       throw 'Server mengembalikan kode ${response.statusCode} (${response.body})';
