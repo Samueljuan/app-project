@@ -318,22 +318,30 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(payload),
         );
+    Future<http.Response> getFallback() => http.get(
+          Uri.parse(
+            '$url?value=${Uri.encodeComponent(code)}&scannedAt=${Uri.encodeComponent(payload['scannedAt']!)}',
+          ),
+        );
 
-    http.Response? response;
+    late http.Response response;
+    var gotResponse = false;
     // Try the simplest form POST first (no preflight); fall back to JSON if needed.
     try {
       response = await postForm();
+      gotResponse = true;
     } on http.ClientException catch (error) {
       _appendLog(
         'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
         'Mencoba ulang dengan JSON...',
       );
-      response = null;
     }
 
-    if (response == null || response.statusCode >= 400) {
+    final needsRetry = !gotResponse || response.statusCode >= 400;
+    if (needsRetry) {
       try {
         response = await postJson();
+        gotResponse = true;
       } on http.ClientException catch (error) {
         final looksLikeCors = error.message.contains('Failed to fetch') ||
             error.message.contains('Load failed');
@@ -342,13 +350,23 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
           'Data mungkin sudah sampai, cek spreadsheet.',
         );
         if (looksLikeCors) {
-          return;
+          // Try GET with query params (simple request, no preflight).
+          response = await getFallback();
+          gotResponse = true;
+        } else {
+          rethrow;
         }
-        rethrow;
       }
     }
 
-    if (response != null && response.statusCode >= 400) {
+    if (!gotResponse) {
+      _appendLog(
+        'Tidak ada respons terbaca dari Apps Script. Cek koneksi/CORS dan coba lagi.',
+      );
+      return;
+    }
+
+    if (response.statusCode >= 400) {
       throw 'Server mengembalikan kode ${response.statusCode} (${response.body})';
     }
 

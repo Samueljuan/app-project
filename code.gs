@@ -1,8 +1,27 @@
 const SHEET_ID = '1ISLFFJKkfUkDQ2NoAl772k9jjAr_wVo-tBfa9-4AcUA';
 const SHEET_NAME = 'Sheet1';
 
-function doGet() {
-  return buildResponse_({ status: 'ok', message: 'Endpoint siap menerima data' });
+function doGet(e) {
+  try {
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      throw new Error(`Sheet "${SHEET_NAME}" tidak ditemukan`);
+    }
+
+    const payload = getPayload_(e);
+    if (payload.value) {
+      sheet.appendRow([payload.value]);
+    }
+
+    return buildResponse_({
+      status: 'ok',
+      message: 'Endpoint siap menerima data',
+      received: payload,
+    });
+  } catch (err) {
+    console.error(err);
+    return buildResponse_({ status: 'error', message: err.toString() }, 500);
+  }
 }
 
 function doOptions() {
