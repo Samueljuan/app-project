@@ -312,36 +312,43 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
       'scannedAt': scannedAt.toUtc().toIso8601String(),
     };
 
+    Future<http.Response> postForm() => http.post(Uri.parse(url), body: payload);
     Future<http.Response> postJson() => http.post(
           Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(payload),
         );
 
-    Future<http.Response> postForm() => http.post(
-          Uri.parse(url),
-          body: payload,
-        );
-
-    http.Response response;
+    http.Response? response;
+    // Try the simplest form POST first (no preflight); fall back to JSON if needed.
     try {
-      response = await postJson();
+      response = await postForm();
     } on http.ClientException catch (error) {
-      final message = error.message;
-      final looksLikeCors =
-          message.contains('Failed to fetch') || message.contains('Load failed');
       _appendLog(
         'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
-        'Mencoba ulang dengan request alternatif...',
+        'Mencoba ulang dengan JSON...',
       );
-      if (looksLikeCors) {
-        response = await postForm();
-      } else {
+      response = null;
+    }
+
+    if (response == null || response.statusCode >= 400) {
+      try {
+        response = await postJson();
+      } on http.ClientException catch (error) {
+        final looksLikeCors = error.message.contains('Failed to fetch') ||
+            error.message.contains('Load failed');
+        _appendLog(
+          'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
+          'Data mungkin sudah sampai, cek spreadsheet.',
+        );
+        if (looksLikeCors) {
+          return;
+        }
         rethrow;
       }
     }
 
-    if (response.statusCode >= 400) {
+    if (response != null && response.statusCode >= 400) {
       throw 'Server mengembalikan kode ${response.statusCode} (${response.body})';
     }
 
