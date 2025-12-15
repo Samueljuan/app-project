@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -306,28 +307,38 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
     if (url.isEmpty) {
       throw 'Isi kAppsScriptUrl dengan URL Apps Script milikmu';
     }
+    final payload = {
+      'value': code,
+      'scannedAt': scannedAt.toUtc().toIso8601String(),
+    };
+
+    Future<http.Response> postJson() => http.post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(payload),
+        );
+
+    Future<http.Response> postForm() => http.post(
+          Uri.parse(url),
+          body: payload,
+        );
 
     http.Response response;
     try {
-      response = await http.post(
-        Uri.parse(url),
-        body: {
-          'value': code,
-          'scannedAt': scannedAt.toUtc().toIso8601String(),
-        },
-      );
+      response = await postJson();
     } on http.ClientException catch (error) {
       final message = error.message;
       final looksLikeCors =
           message.contains('Failed to fetch') || message.contains('Load failed');
       _appendLog(
         'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
-        'Data biasanya tetap terkirim, cek spreadsheet untuk memastikannya.',
+        'Mencoba ulang dengan request alternatif...',
       );
       if (looksLikeCors) {
-        return;
+        response = await postForm();
+      } else {
+        rethrow;
       }
-      rethrow;
     }
 
     if (response.statusCode >= 400) {

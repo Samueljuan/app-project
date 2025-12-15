@@ -5,6 +5,10 @@ function doGet() {
   return buildResponse_({ status: 'ok', message: 'Endpoint siap menerima data' });
 }
 
+function doOptions() {
+  return buildResponse_({ status: 'ok', message: 'Preflight allowed' });
+}
+
 function doPost(e) {
   try {
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
@@ -13,6 +17,10 @@ function doPost(e) {
     }
 
     const payload = getPayload_(e);
+
+    if (!payload.value) {
+      throw new Error('Field "value" kosong atau tidak ditemukan');
+    }
 
     sheet.appendRow([payload.value || '']);
 
@@ -47,7 +55,7 @@ function buildResponse_(body, statusCode) {
   const output = ContentService.createTextOutput(JSON.stringify(body))
     .setMimeType(ContentService.MimeType.JSON)
     .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Origin, X-Requested-With')
     .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     .setHeader('Access-Control-Max-Age', '3600');
   if (statusCode) {
