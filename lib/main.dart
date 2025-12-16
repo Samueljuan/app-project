@@ -5,11 +5,42 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto/crypto.dart';
 
 const String kAppsScriptUrl = String.fromEnvironment(
   'APPS_SCRIPT_URL',
   defaultValue: '',
 );
+
+const String kLoginUsername =
+    String.fromEnvironment('LOGIN_USERNAME', defaultValue: '');
+const String kLoginPassword =
+    String.fromEnvironment('LOGIN_PASSWORD', defaultValue: '');
+const String kLoginPasswordHash =
+    String.fromEnvironment('LOGIN_PASSWORD_HASH', defaultValue: '');
+
+String _normalizeCredential(String value) => value.trim();
+
+final String _resolvedLoginUsername = _normalizeCredential(kLoginUsername);
+final String _resolvedLoginPassword = _normalizeCredential(kLoginPassword);
+final String _resolvedLoginPasswordHash =
+    _normalizeCredential(kLoginPasswordHash).toLowerCase();
+
+String _hashPassword(String raw) {
+  final bytes = utf8.encode(raw);
+  final digest = sha256.convert(bytes);
+  return digest.toString();
+}
+
+bool _isPasswordMatch(String rawInput) {
+  if (_resolvedLoginPasswordHash.isNotEmpty) {
+    return _hashPassword(rawInput) == _resolvedLoginPasswordHash;
+  }
+  if (_resolvedLoginPassword.isNotEmpty) {
+    return rawInput == _resolvedLoginPassword;
+  }
+  return false;
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,8 +80,12 @@ class ScannerPage extends StatefulWidget {
 }
 
 class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
-  static const _kUsername = 'randomstuff.smg';
-  static const _kPassword = 'renata elek';
+  static final String _kUsername = _resolvedLoginUsername;
+  static final String _kPassword = _resolvedLoginPassword;
+  static final String _kPasswordHash = _resolvedLoginPasswordHash;
+  static bool get _credentialsConfigured =>
+      _kUsername.isNotEmpty &&
+      (_kPassword.isNotEmpty || _kPasswordHash.isNotEmpty);
   static const _kAuthStorageKey = 'last_auth_timestamp';
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
@@ -218,13 +253,23 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
   }
 
   Future<void> _handleLogin() async {
+    if (!_credentialsConfigured) {
+      setState(() {
+        _authError =
+            'LOGIN_USERNAME dan LOGIN_PASSWORD belum dikonfigurasi. '
+            'Isi keduanya via --dart-define atau environment variable.';
+      });
+      return;
+    }
     setState(() {
       _isAuthenticating = true;
       _authError = null;
     });
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
-    if (username != _kUsername || password != _kPassword) {
+    final usernameMatches = username == _kUsername;
+    final passwordMatches = _isPasswordMatch(password);
+    if (!usernameMatches || !passwordMatches) {
       setState(() {
         _authError = 'Username atau password salah.';
         _isAuthenticating = false;

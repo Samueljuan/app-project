@@ -8,7 +8,7 @@ Scan any QR / barcode from the browser, review the payload, and ship it straight
 
 - **Mobile-first camera UI** powered by [`mobile_scanner`](https://pub.dev/packages/mobile_scanner) with lifecycle-aware pause/resume.
 - **Submit flow with confirmation**: scan → preview → tap **Submit** to send to Sheets, keeping a one-line activity log.
-- **Auth gate** (username `randomstuff.smg`, password `renata elek`). Sessions expire every 24 h and are stored locally via `shared_preferences`.
+- **Auth gate** controlled via env vars (`LOGIN_USERNAME` plus `LOGIN_PASSWORD` or `LOGIN_PASSWORD_HASH`). Sessions expire every 24 h and are stored locally via `shared_preferences`.
 - **Env-configured Apps Script URL** (`APPS_SCRIPT_URL`). No hardcoded endpoints—safe for open-source deployments.
 - **Optimised PWA metadata**: manifest, icons, Apple touch icon, and theme colours ready for “Add to Home Screen”.
 
@@ -21,6 +21,7 @@ Scan any QR / barcode from the browser, review the payload, and ship it straight
 | Flutter SDK | v3.22.x or newer with web support enabled (`flutter config --enable-web`). |
 | Google Sheet | Stores the scan results. The first column receives the scanned value. |
 | Google Apps Script | Acts as the API layer. Must be deployed as a Web App with *Execute as Me* and *Who has access: Anyone*. |
+| Login credentials | Provide `LOGIN_USERNAME` and either `LOGIN_PASSWORD` (plain) **or** `LOGIN_PASSWORD_HASH` (SHA-256 hex). |
 
 ---
 
@@ -79,17 +80,31 @@ Always provide the Apps Script endpoint using `--dart-define`:
 
 ```bash
 flutter run -d chrome \
-  --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+  --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec \
+  --dart-define=LOGIN_USERNAME=<YOUR_USERNAME> \
+  --dart-define=LOGIN_PASSWORD_HASH=<SHA256_HEX>
 ```
 
 To produce a release bundle:
 
 ```bash
 flutter build web \
-  --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+  --dart-define=APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec \
+  --dart-define=LOGIN_USERNAME=<YOUR_USERNAME> \
+  --dart-define=LOGIN_PASSWORD_HASH=<SHA256_HEX>
 ```
 
 The default constant `kAppsScriptUrl` is intentionally empty—without the `--dart-define` the app refuses to send data.
+
+### Generating a SHA-256 password hash
+
+If you prefer not to store plaintext passwords, create a hash once and use `LOGIN_PASSWORD_HASH`:
+
+```bash
+echo -n 'your-password' | shasum -a 256 | awk '{print $1}'
+```
+
+Copy the resulting hex string into the env variable. The app will hash user input before comparing.
 
 ---
 
@@ -118,7 +133,10 @@ All icons (manifest, favicon, Apple touch) point to a single asset: `web/icons/a
    - **Build Command:** `bash scripts/ci_build.sh`
    - **Output Directory:** `build/web`
    - **Install Command:** disable (the build script handles Flutter download + `pub get`)
-3. In **Environment Variables**, add `APPS_SCRIPT_URL`.
+3. In **Environment Variables**, add at minimum:
+   - `APPS_SCRIPT_URL`
+   - `LOGIN_USERNAME`
+   - Either `LOGIN_PASSWORD` **or** `LOGIN_PASSWORD_HASH`
 4. (Optional) Set `FLUTTER_VERSION=3.32.1` inside the build command if Vercel should use a specific SDK (`FLUTTER_VERSION=3.32.1 bash scripts/ci_build.sh`).
 
 `scripts/ci_build.sh` downloads Flutter for Linux inside the build container, marks the repo safe (`git config --global --add safe.directory`), runs `flutter pub get`, and builds the web bundle with the supplied `APPS_SCRIPT_URL`.

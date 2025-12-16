@@ -24,9 +24,24 @@ flutter config --enable-web >/dev/null
 
 flutter pub get
 
+build_args=(build web)
+
 if [ -z "${APPS_SCRIPT_URL:-}" ]; then
   echo "WARNING: APPS_SCRIPT_URL env variable is empty. Build will use empty URL."
-  flutter build web
 else
-  flutter build web --dart-define=APPS_SCRIPT_URL="${APPS_SCRIPT_URL}"
+  build_args+=("--dart-define=APPS_SCRIPT_URL=${APPS_SCRIPT_URL}")
 fi
+
+if [ -n "${LOGIN_USERNAME:-}" ]; then
+  build_args+=("--dart-define=LOGIN_USERNAME=${LOGIN_USERNAME}")
+fi
+
+if [ -n "${LOGIN_PASSWORD:-}" ]; then
+  build_args+=("--dart-define=LOGIN_PASSWORD=${LOGIN_PASSWORD}")
+fi
+
+if [ -n "${LOGIN_PASSWORD_HASH:-}" ]; then
+  build_args+=("--dart-define=LOGIN_PASSWORD_HASH=${LOGIN_PASSWORD_HASH}")
+fi
+
+flutter "${build_args[@]}"
