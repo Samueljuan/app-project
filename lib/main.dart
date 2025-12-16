@@ -285,6 +285,14 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
     }
   }
 
+  bool _looksLikeCorsError(http.ClientException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('failed to fetch') ||
+        message.contains('load failed') ||
+        message.contains('access-control') ||
+        message.contains('cors');
+  }
+
   void _scheduleStatusReset({Duration duration = const Duration(seconds: 4)}) {
     _statusResetTimer?.cancel();
     _statusResetTimer = Timer(duration, () {
@@ -318,63 +326,41 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(payload),
         );
-    Future<http.Response> getFallback() => http.get(
-          Uri.parse(
-            '$url?value=${Uri.encodeComponent(code)}&scannedAt=${Uri.encodeComponent(payload['scannedAt']!)}',
-          ),
-        );
 
-    late http.Response response;
-    var gotResponse = false;
-    // Try the simplest form POST first (no preflight); fall back to JSON if needed.
+    http.Response? response;
     try {
       response = await postForm();
-      gotResponse = true;
     } on http.ClientException catch (error) {
-      _appendLog(
-        'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
-        'Mencoba ulang dengan JSON...',
-      );
-    }
-
-    final needsRetry = !gotResponse || response.statusCode >= 400;
-    if (needsRetry) {
-      try {
-        response = await postJson();
-        gotResponse = true;
-      } on http.ClientException catch (error) {
-        final looksLikeCors = error.message.contains('Failed to fetch') ||
-            error.message.contains('Load failed');
+      if (_looksLikeCorsError(error)) {
         _appendLog(
-          'Catatan: respons Apps Script tidak bisa dibaca (${error.message}). '
-          'Data mungkin sudah sampai, cek spreadsheet.',
+          'Data kemungkinan sudah terkirim (respons diblokir browser/CORS). '
+          'Cek Google Sheet untuk memastikan.',
         );
-        if (looksLikeCors) {
-          // Try GET with query params (simple request, no preflight).
-          response = await getFallback();
-          gotResponse = true;
-        } else {
-          rethrow;
-        }
+        return;
       }
-    }
-
-    if (!gotResponse) {
       _appendLog(
-        'Tidak ada respons terbaca dari Apps Script. Cek koneksi/CORS dan coba lagi.',
+        'Gagal membaca respons (${error.message}). Mencoba format lain...',
       );
-      return;
+      response = await postJson();
     }
 
     if (response.statusCode >= 400) {
-      throw 'Server mengembalikan kode ${response.statusCode} (${response.body})';
+      // If form post failed with status, try JSON once more unless we already did.
+      if (response.request?.headers['content-type'] != 'application/json') {
+        final retry = await postJson();
+        if (retry.statusCode >= 400) {
+          throw 'Server mengembalikan kode ${retry.statusCode} (${retry.body})';
+        }
+        response = retry;
+      } else {
+        throw 'Server mengembalikan kode ${response.statusCode} (${response.body})';
+      }
     }
 
     if (response.body.isNotEmpty) {
       _appendLog('Respons server: ${response.body}');
     }
   }
-
   Widget _buildSubmitButton() {
     final pendingText = _pendingValue;
     final label = _isSending
