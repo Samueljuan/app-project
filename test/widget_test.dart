@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app_scan_qr/main.dart';
+import 'package:app_scan_qr/config/app_config.dart';
 
 void main() {
   test('default Apps Script URL sesuai konfigurasi', () {
