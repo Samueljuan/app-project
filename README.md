@@ -96,6 +96,27 @@ flutter build web \
 
 The default constant `kAppsScriptUrl` is intentionally empty—without the `--dart-define` the app refuses to send data.
 
+### Local shortcut (Makefile + env.json)
+
+For convenience, you can use the Makefile targets so you don’t have to type long commands.
+
+1. Create `env.json` locally (this file is ignored by git):
+
+```json
+{
+  "APPS_SCRIPT_URL": "https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec",
+  "LOGIN_USERNAME": "your_username",
+  "LOGIN_PASSWORD_HASH": "your_sha256_hex"
+}
+```
+
+2. Run or build with short commands:
+
+```bash
+make run
+make build
+```
+
 ### Generating a SHA-256 password hash
 
 If you prefer not to store plaintext passwords, create a hash once and use `LOGIN_PASSWORD_HASH`:
